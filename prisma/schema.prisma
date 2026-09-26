@@ -1,0 +1,76 @@
+// Prisma schema for MAX messenger chat (GREEN-API test assignment)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// GREEN-API credentials entered by the user in the login screen.
+model Account {
+  id                String   @id @default(cuid())
+  idInstance        String   @unique
+  apiTokenInstance  String
+  // Optional GREEN-API apiUrl override (defaults to https://api.green-api.com)
+  apiUrl            String?
+  // Optional friendly label for the user
+  label             String?
+  // Last known state from getStateInstance
+  stateInstance     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  chats Chat[]
+}
+
+// A chat (1 recipient phone number → 1 MAX chatId).
+model Chat {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  // MAX chatId returned by checkAccount (e.g. "10000000")
+  chatId      String
+  // Phone number the user typed (e.g. 79991234567)
+  phoneNumber String
+  // Optional display name (senderName from incoming webhook or user-set)
+  name        String?
+  // Timestamp when the user last opened this chat (for unread counting).
+  lastOpenedAt DateTime @default(now())
+  // Whether the chat is pinned to the top of the sidebar.
+  pinned      Boolean  @default(false)
+  // Whether notifications (sound) are muted for this chat.
+  muted       Boolean  @default(false)
+  // Whether the chat is archived (hidden from the main sidebar list).
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messages Message[]
+
+  @@unique([accountId, chatId])
+  @@index([accountId, phoneNumber])
+}
+
+// A single text message in a chat.
+model Message {
+  id          String   @id @default(cuid())
+  chatId      String
+  chat        Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  // GREEN-API idMessage (from sendMessage response or incoming webhook)
+  externalId  String?  @unique
+  // "outgoing" | "incoming"
+  direction   String
+  text        String
+  // Delivery status: "pending" | "sent" | "delivered" | "read" | "failed"
+  status      String   @default("sent")
+  // Unix seconds from GREEN-API webhook, fallback to local time
+  timestamp   Int
+  // Optional reference to a message being replied to (local-only feature).
+  replyToId   String?
+  createdAt   DateTime @default(now())
+
+  @@index([chatId, timestamp])
+}
